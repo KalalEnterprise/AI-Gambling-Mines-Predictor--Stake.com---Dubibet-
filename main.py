@@ -7,7 +7,7 @@ import pandas as pd
 import tkinter as tk
 import cv2
 import time
-
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             
 # CONFIGURATION
 BOARD_REGION = None  # (left, top, width, height)
 TILE_SIZE = 50  # Approximate size in pixels
@@ -204,7 +204,8 @@ class PredictorApp(ctk.CTk):
                 "Region/Grid Mismatch",
                 f"Warning: The selected region size ({width}x{height}) is not evenly divisible by the board size ({TILE_COLS}x{TILE_ROWS}).\nSome tiles may be empty."
             )
-        self.region_label.configure(text=f"Board Region: {BOARD_REGION}", text_color="green")
+        if hasattr(self, 'region_label') and self.region_label.winfo_exists():
+            self.region_label.configure(text=f"Board Region: {BOARD_REGION}", text_color="green")
         self.deiconify()
 
     def launch_predictor(self):
@@ -296,6 +297,11 @@ class PredictorApp(ctk.CTk):
         self.info_label.configure(text=f"Board: {TILE_ROWS}x{TILE_COLS} | Mines: {MINE_COUNT}")
 
     def start_predictor(self):
+        global BOARD_REGION
+        if BOARD_REGION is None or not isinstance(BOARD_REGION, tuple) or len(BOARD_REGION) != 4 or any(v <= 0 for v in BOARD_REGION[2:]):
+            tk.messagebox.showwarning("Board Region Required", "Please select a valid board region before starting the predictor.")
+            self.select_region()
+            return
         self.running = True
         self.status_label.configure(text="Status: Running")
         self.run_prediction_loop()
@@ -307,16 +313,25 @@ class PredictorApp(ctk.CTk):
             self.after_cancel(self.after_id)
 
     def run_prediction_loop(self):
+        global BOARD_REGION
         if not self.running:
             return
-        if BOARD_REGION is None:
-            self.status_label.configure(text="Status: Set BOARD_REGION in code!")
+        if BOARD_REGION is None or not isinstance(BOARD_REGION, tuple) or len(BOARD_REGION) != 4 or any(v <= 0 for v in BOARD_REGION[2:]):
+            self.status_label.configure(text="Status: Board region not set or invalid. Please select the region.")
+            self.running = False
+            # Offer to re-select region
+            if hasattr(self, 'region_label'):
+                self.region_label.configure(text="Board Region: Not Set", text_color="#ffb347")
+            if tk.messagebox.askyesno("Select Board Region", "Board region is not set or invalid. Do you want to select the region now?"):
+                self.select_region()
             return
         board_img = capture_board(BOARD_REGION)
         # Safeguard: check if screenshot is valid
         if board_img is None or board_img.size[0] == 0 or board_img.size[1] == 0:
             self.status_label.configure(text="Status: Invalid board region or screenshot. Please re-select region.")
             self.running = False
+            if tk.messagebox.askyesno("Invalid Region", "Screenshot failed. Do you want to select the region again?"):
+                self.select_region()
             return
         try:
             tiles = detect_tiles(board_img)
